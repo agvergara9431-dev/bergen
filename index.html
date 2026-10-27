@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bergen Top 10</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap">
 <style>
-  /* Layout: map fills the screen; a bottom sheet lists the 10 stops, dragged by thumb. Fjord blues, timber red for Bryggen. */
+  /* Layout: two big tabs at the bottom (Mapa / Lugares). Lugares is a scroll of photo cards with large type. Fjord blues, timber red. */
   :root {
     --bg: #f3efe6;
     --fg: #1c2430;
-    --muted: #5d6673;
+    --muted: #4f5866;
     --accent: #b23a2a;
     --fjord: #1f5f8b;
     --panel: #fffdf8;
@@ -20,148 +20,230 @@
     --font-body: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
   }
   html, body { height: 100%; margin: 0; }
-  body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; overflow: hidden; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 19px; line-height: 1.45; overflow: hidden; display: flex; flex-direction: column; }
+  main { flex: 1; position: relative; min-height: 0; }
   #map { position: absolute; inset: 0; }
-  .topbar {
-    position: absolute; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 500;
-    padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
-    display: flex; align-items: center; gap: 10px; pointer-events: none;
-  }
-  .topbar h1 { font-family: var(--font-display); font-size: 20px; margin: 0; background: var(--panel); padding: 8px 14px; border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.18); pointer-events: auto; }
+  .view { position: absolute; inset: 0; }
+  #places { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); }
+  .intro { padding: 18px 0 6px; }
+  .intro h1 { font-family: var(--font-display); font-size: 30px; margin: 0 0 4px; }
+  .intro p { margin: 0; color: var(--muted); font-size: 17px; }
+
+  .topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 500; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 10px; pointer-events: none; }
+  .topbar h1 { font-family: var(--font-display); font-size: 22px; margin: 0; background: var(--panel); padding: 10px 16px; border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.18); pointer-events: auto; }
   .topbar button { pointer-events: auto; }
-  button.pill {
-    font: 600 14px var(--font-body); border: 0; border-radius: 999px; padding: 9px 14px; cursor: pointer;
-    background: var(--fjord); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.18);
-  }
-  button.pill:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button.pill { font: 700 17px var(--font-body); border: 0; border-radius: 999px; padding: 12px 18px; cursor: pointer; background: var(--fjord); color: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
   button.pill.off { background: var(--muted); }
-  .sheet {
-    position: absolute; left: 0; right: 0; bottom: 0; z-index: 600;
-    background: var(--panel); border-radius: 18px 18px 0 0; box-shadow: 0 -4px 18px rgba(0,0,0,.2);
-    max-height: 62%; display: flex; flex-direction: column;
-    transition: transform .25s ease;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .sheet.collapsed { transform: translateY(calc(100% - 58px - env(safe-area-inset-bottom, 0px))); }
-  .handle { flex: none; padding: 10px 16px 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .handle::before { content: ""; position: absolute; top: 6px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
-  .handle strong { font-family: var(--font-display); font-size: 17px; }
-  .status { font-size: 13px; color: var(--muted); }
-  ol { list-style: none; margin: 0; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
-  li { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
-  li:first-child { border-top: 0; }
-  li .num { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font: 700 13px var(--font-display); display: grid; place-items: center; }
-  li .name { font-weight: 600; }
-  li .why { font-size: 13px; color: var(--muted); }
-  li .dist { font-size: 13px; color: var(--fjord); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
-  li a { color: var(--fjord); font-size: 13px; text-decoration: none; }
-  li a:hover { text-decoration: underline; }
-  .pin { width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); display: grid; place-items: center; }
-  .pin span { transform: rotate(45deg); color: #fff; font: 700 12px var(--font-display); }
-  .me { width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(26,115,232,.25); }
-  .leaflet-popup-content { font-family: var(--font-body); font-size: 14px; margin: 10px 14px; }
-  .leaflet-popup-content b { font-family: var(--font-display); font-size: 15px; display: block; margin-bottom: 4px; }
-  .leaflet-popup-content a { color: var(--fjord); }
-  @media (prefers-reduced-motion: reduce) { .sheet { transition: none; } }
+  button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .status { position: absolute; left: 0; right: 0; bottom: 10px; z-index: 500; text-align: center; pointer-events: none; }
+  .status span { display: inline-block; background: var(--panel); padding: 8px 14px; border-radius: 999px; font-size: 16px; color: var(--muted); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+
+  nav { flex: none; display: grid; grid-template-columns: 1fr 1fr; background: var(--panel); border-top: 1px solid var(--line); padding: 0 max(0px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(0px, env(safe-area-inset-left, 0px)); }
+  nav button { font: 700 19px var(--font-body); padding: 16px 8px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-top: 4px solid transparent; }
+  nav button[aria-selected="true"] { color: var(--accent); border-top-color: var(--accent); }
+
+  .card { background: var(--panel); border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-top: 18px; overflow: hidden; }
+  .card .photo { position: relative; aspect-ratio: 16 / 10; max-width: 100%; background: #dcd5c6 linear-gradient(160deg, #e6dfd0, #cfd8df); }
+  .card .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .photo .num { position: absolute; top: 12px; left: 12px; width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; font: 700 22px var(--font-display); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+  .card .photo .credit { position: absolute; right: 8px; bottom: 6px; font-size: 12px; color: #fff; text-shadow: 0 0 4px #000; }
+  .card .body { padding: 14px 16px 16px; }
+  .card h2 { font-family: var(--font-display); font-size: 25px; margin: 0 0 4px; text-wrap: balance; }
+  .card .sub { color: var(--fjord); font-weight: 600; font-size: 17px; margin: 0 0 10px; }
+  .card p { margin: 0 0 10px; }
+  .card .tip { background: #eef3f7; border-left: 4px solid var(--fjord); padding: 8px 12px; border-radius: 6px; font-size: 17px; margin: 10px 0 14px; }
+  .card .tip strong { color: var(--fjord); }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions a, .actions button { flex: 1 1 140px; text-align: center; font: 700 18px var(--font-body); padding: 14px 12px; border-radius: 12px; border: 0; cursor: pointer; text-decoration: none; }
+  .actions a { background: var(--fjord); color: #fff; }
+  .actions button { background: #fff; color: var(--fjord); border: 2px solid var(--fjord); }
+  .dist { font-size: 17px; color: var(--muted); margin: 0 0 10px; font-variant-numeric: tabular-nums; }
+  .dist:empty { display: none; }
+  .foot { font-size: 14px; color: var(--muted); margin-top: 24px; text-align: center; }
+
+  .pin { width: 34px; height: 34px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--accent); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); display: grid; place-items: center; }
+  .pin span { transform: rotate(45deg); color: #fff; font: 700 15px var(--font-display); }
+  .me { width: 20px; height: 20px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 7px rgba(26,115,232,.25); }
+  .leaflet-popup-content { font-family: var(--font-body); font-size: 17px; margin: 12px 16px; line-height: 1.4; }
+  .leaflet-popup-content b { font-family: var(--font-display); font-size: 19px; display: block; margin-bottom: 6px; }
+  .leaflet-popup-content a, .leaflet-popup-content button { display: inline-block; margin-top: 8px; font: 700 16px var(--font-body); padding: 10px 14px; border-radius: 10px; text-decoration: none; }
+  .leaflet-popup-content a { background: var(--fjord); color: #fff; }
+  .leaflet-popup-content button { background: #fff; color: var(--fjord); border: 2px solid var(--fjord); margin-left: 6px; cursor: pointer; }
+  .leaflet-popup-content-wrapper { border-radius: 14px; }
+  .leaflet-container a.leaflet-popup-close-button { font-size: 28px; width: 34px; height: 34px; padding: 6px 4px 0 0; }
 </style>
 </head>
 <body>
-<div id="map" role="application" aria-label="Mapa de Bergen"></div>
-<div class="topbar">
-  <h1>Bergen, top 10</h1>
-  <button class="pill off" id="locBtn" type="button">Mi ubicación</button>
-</div>
-<div class="sheet" id="sheet">
-  <div class="handle" id="handle"><strong>Lugares</strong><span class="status" id="status">Toca "Mi ubicación" para ver dónde estás</span></div>
-  <ol id="list"></ol>
-</div>
+<main>
+  <section class="view" id="mapView">
+    <div id="map" role="application" aria-label="Mapa de Bergen"></div>
+    <div class="topbar">
+      <h1>Bergen, top 10</h1>
+      <button class="pill off" id="locBtn" type="button">Mi ubicación</button>
+    </div>
+    <div class="status"><span id="status">Toca "Mi ubicación" para ver dónde estás</span></div>
+  </section>
+  <section class="view" id="places" hidden>
+    <div class="intro">
+      <h1>Los 10 lugares</h1>
+      <p>Toca "Cómo llegar" para abrir la ruta en Google Maps, o "Ver en el mapa" para ubicarlo.</p>
+    </div>
+    <div id="cards"></div>
+    <p class="foot">Fotos: Wikipedia / Wikimedia Commons. Mapa: OpenStreetMap.</p>
+  </section>
+</main>
+<nav role="tablist">
+  <button type="button" role="tab" id="tabMap" aria-selected="true">Mapa</button>
+  <button type="button" role="tab" id="tabList" aria-selected="false">Lugares</button>
+</nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   var places = [
-    { n: 1, name: "Bryggen", why: "Muelle hanseático, Patrimonio de la Humanidad. Casas de madera de colores.", lat: 60.3974, lng: 5.3241 },
-    { n: 2, name: "Fløibanen (funicular a Fløyen)", why: "Sube en 6 minutos. Vista de toda la ciudad sin caminar.", lat: 60.3963, lng: 5.3285 },
-    { n: 3, name: "Fisketorget (mercado de pescado)", why: "Almuerzo de salmón, cangrejo real y sopa de pescado frente al puerto.", lat: 60.3946, lng: 5.3254 },
-    { n: 4, name: "Crucero por el fiordo a Mostraumen", why: "3.5 horas en barco desde Zachariasbryggen. Sentado todo el camino.", lat: 60.3955, lng: 5.3257 },
-    { n: 5, name: "Fortaleza de Bergenhus", why: "Håkonshallen y la torre Rosenkrantz, al final del muelle.", lat: 60.3996, lng: 5.3186 },
-    { n: 6, name: "Bryggens Museum", why: "Ruinas medievales bajo techo, justo detrás de Bryggen.", lat: 60.3979, lng: 5.3230 },
-    { n: 7, name: "Teleférico Ulriken", why: "La montaña más alta de Bergen. Café en la cima.", lat: 60.3786, lng: 5.3579 },
-    { n: 8, name: "Museos de arte KODE", why: "Munch y arte noruego, frente al lago Lille Lungegårdsvann.", lat: 60.3909, lng: 5.3253 },
-    { n: 9, name: "Akvariet (acuario)", why: "Pingüinos y focas en Nordnes. Bus 11 desde el centro.", lat: 60.3999, lng: 5.3031 },
-    { n: 10, name: "Troldhaugen (casa de Grieg)", why: "Casa del compositor Edvard Grieg, junto a un lago. Tranvía Bybanen + bus.", lat: 60.3419, lng: 5.3542 }
+    { n: 1, name: "Bryggen", sub: "El muelle hanseático", lat: 60.3974, lng: 5.3241,
+      wiki: ["en:Bryggen"],
+      text: "Es la postal de Bergen: una fila de casas de madera de colores frente al puerto. Aquí vivían y comerciaban los mercaderes alemanes de la Liga Hanseática desde el siglo XIV, sobre todo con bacalao seco. Las casas actuales se reconstruyeron después del gran incendio de 1702 siguiendo el trazado medieval. Es Patrimonio de la Humanidad de la UNESCO desde 1979.",
+      tip: "Camina por los pasillos estrechos entre las casas, hay tiendas de artesanía y cafés. Terreno plano, sin escaleras. Una hora es suficiente." },
+    { n: 2, name: "Fløibanen", sub: "Funicular al monte Fløyen", lat: 60.3963, lng: 5.3285,
+      wiki: ["en:Fløibanen"],
+      text: "Un funicular que sube en unos 6 minutos hasta los 320 metros del monte Fløyen. Funciona desde 1918 y la estación de abajo está a dos cuadras del mercado de pescado. Arriba hay un mirador con vista de toda la ciudad, el puerto y las islas, además de un café y un restaurante.",
+      tip: "Sube y baja en el funicular, no hace falta caminar nada. Si el día está despejado, es el mejor lugar para fotos. Compra el boleto de ida y vuelta." },
+    { n: 3, name: "Fisketorget", sub: "El mercado de pescado", lat: 60.3946, lng: 5.3254,
+      wiki: ["en:Fisketorget", "no:Fisketorget i Bergen"],
+      text: "El mercado de pescado está al fondo del puerto, en la plaza frente a Bryggen. Hay puestos al aire libre y un edificio cerrado (Mathallen) con restaurantes. Se come salmón ahumado, cangrejo real, camarones y sopa de pescado, y también hay quesos y frutas locales.",
+      tip: "Buen lugar para almorzar sentados mirando el puerto. Los precios son altos, como en toda Noruega; la sopa de pescado es la opción más económica." },
+    { n: 4, name: "Crucero por el fiordo", sub: "Bergen a Mostraumen", lat: 60.3955, lng: 5.3257,
+      wiki: ["en:Osterfjorden", "no:Osterfjorden"],
+      text: "Un paseo en barco de unas 3 horas y media que sale del muelle Zachariasbryggen, junto al mercado. Recorre el fiordo Osterfjord entre montañas y cascadas hasta el estrecho de Mostraumen, donde el barco se acerca a la orilla para que puedas tocar el agua de una cascada.",
+      tip: "Vas sentado todo el viaje, con cubierta interior calefaccionada y cubierta exterior para fotos. Lleva abrigo y gorro, en el agua hace más frío." },
+    { n: 5, name: "Fortaleza de Bergenhus", sub: "Håkonshallen y torre Rosenkrantz", lat: 60.3996, lng: 5.3186,
+      wiki: ["en:Bergenhus Fortress"],
+      text: "Está al final del muelle, pasando Bryggen. Es una de las fortalezas más antiguas de Noruega. Dentro están Håkonshallen, el salón real de piedra construido hacia 1261 para la coronación del rey Magnus, y la torre Rosenkrantz, del siglo XVI, que servía de residencia y defensa.",
+      tip: "El parque de la fortaleza es gratuito y plano, ideal para un paseo tranquilo. La torre tiene escaleras empinadas; se puede ver desde afuera sin subir." },
+    { n: 6, name: "Bryggens Museum", sub: "Ruinas medievales bajo techo", lat: 60.3979, lng: 5.3230,
+      wiki: ["en:Bryggens Museum", "no:Bryggens Museum"],
+      text: "Un museo construido sobre las ruinas que aparecieron tras el incendio de 1955 en Bryggen. Muestra los cimientos originales del siglo XII, objetos de la vida diaria de los mercaderes y tablillas con inscripciones rúnicas encontradas en las excavaciones.",
+      tip: "Todo está en un mismo nivel y bajo techo, buena opción si llueve. Queda justo detrás de Bryggen." },
+    { n: 7, name: "Ulriken", sub: "Teleférico a la montaña más alta", lat: 60.3786, lng: 5.3579,
+      wiki: ["en:Ulriken"],
+      text: "Ulriken es la más alta de las siete montañas que rodean Bergen, con 643 metros. Un teleférico sube en unos 7 minutos hasta la cima, donde hay un restaurante y miradores con vista a los fiordos, las islas y el mar.",
+      tip: "La estación de abajo está fuera del centro; se llega en bus o taxi (15 minutos). Arriba sopla viento fuerte, lleva abrigo. Si ya subiste a Fløyen y el tiempo está nublado, este se puede saltar." },
+    { n: 8, name: "Museos KODE", sub: "Arte noruego y Edvard Munch", lat: 60.3909, lng: 5.3253,
+      wiki: ["en:KODE Art Museums and Composer Homes", "en:KODE Art Museums", "no:KODE"],
+      text: "Cuatro edificios de museo en fila frente al lago Lille Lungegårdsvann, en pleno centro. Tienen una de las mayores colecciones de Edvard Munch fuera de Oslo, pintura romántica noruega con paisajes de fiordos, y artes decorativas. Una sola entrada sirve para los cuatro.",
+      tip: "KODE 3 es el edificio de Munch. Hay ascensores y bancos en las salas. El parque del lago, enfrente, es un buen lugar para sentarse." },
+    { n: 9, name: "Akvariet", sub: "El acuario de Bergen", lat: 60.3999, lng: 5.3031,
+      wiki: ["en:Bergen Aquarium", "no:Akvariet i Bergen"],
+      text: "Está en la punta de la península de Nordnes, frente al mar. Tiene pingüinos, focas, leones marinos, nutrias y tanques con peces del Mar del Norte. Hay horarios de alimentación de pingüinos y focas durante el día.",
+      tip: "Se llega en el bus 11 desde el centro, para en la puerta. Es un lugar relajado para una visita de hora y media." },
+    { n: 10, name: "Troldhaugen", sub: "La casa de Edvard Grieg", lat: 60.3419, lng: 5.3542,
+      wiki: ["en:Troldhaugen"],
+      text: "La casa donde vivió el compositor Edvard Grieg desde 1885 hasta su muerte en 1907, a orillas de un lago en las afueras de Bergen. Se conserva con sus muebles originales, el piano Steinway y la cabaña junto al agua donde componía. Hay un museo y una sala de conciertos con vista al lago.",
+      tip: "Queda a 8 km del centro: tranvía Bybanen hasta Hop y luego 20 minutos a pie, o taxi directo (más cómodo). El camino desde el tranvía tiene subida." }
   ];
 
-  var map = L.map("map", { zoomControl: false }).setView([60.392, 5.325], 13);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: "&copy; OpenStreetMap"
-  }).addTo(map);
-  L.control.zoom({ position: "topright" }).addTo(map);
+  // ----- Map -----
+  var map = L.map("map", { zoomControl: true }).setView([60.392, 5.325], 13);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
 
-  function gmaps(p) {
-    return "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=walking";
-  }
+  function gmaps(p) { return "https://www.google.com/maps/dir/?api=1&destination=" + p.lat + "," + p.lng + "&travelmode=walking"; }
 
   var markers = {};
   places.forEach(function (p) {
-    var icon = L.divIcon({ className: "", html: '<div class="pin"><span>' + p.n + "</span></div>", iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -26] });
+    var icon = L.divIcon({ className: "", html: '<div class="pin"><span>' + p.n + "</span></div>", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -32] });
     markers[p.n] = L.marker([p.lat, p.lng], { icon: icon }).addTo(map)
-      .bindPopup("<b>" + p.n + ". " + p.name + "</b>" + p.why + '<br><a href="' + gmaps(p) + '" target="_blank" rel="noopener">Cómo llegar (Google Maps)</a>');
+      .bindPopup("<b>" + p.n + ". " + p.name + "</b>" + p.sub + '<br><a href="' + gmaps(p) + '" target="_blank" rel="noopener">Cómo llegar</a><button type="button" onclick="showCard(' + p.n + ')">Leer más</button>', { maxWidth: 280 });
   });
 
-  var list = document.getElementById("list");
+  // ----- Cards -----
+  var cards = document.getElementById("cards");
   places.forEach(function (p) {
-    var li = document.createElement("li");
-    li.id = "place-" + p.n;
-    li.innerHTML = '<span class="num">' + p.n + '</span><div><div class="name">' + p.name + '</div><div class="why">' + p.why + '</div><a href="' + gmaps(p) + '" target="_blank" rel="noopener">Cómo llegar</a></div><span class="dist" id="dist-' + p.n + '"></span>';
-    li.addEventListener("click", function (e) {
-      if (e.target.tagName === "A") return;
-      map.flyTo([p.lat, p.lng], 16);
-      markers[p.n].openPopup();
-      sheet.classList.add("collapsed");
-    });
-    list.appendChild(li);
+    var c = document.createElement("article");
+    c.className = "card"; c.id = "card-" + p.n;
+    c.innerHTML =
+      '<div class="photo"><img id="img-' + p.n + '" alt="" hidden><span class="num">' + p.n + '</span><span class="credit" id="credit-' + p.n + '"></span></div>' +
+      '<div class="body"><h2>' + p.name + '</h2><p class="sub">' + p.sub + '</p>' +
+      '<p class="dist" id="dist-' + p.n + '"></p>' +
+      '<p>' + p.text + '</p>' +
+      '<div class="tip"><strong>Consejo:</strong> ' + p.tip + '</div>' +
+      '<div class="actions"><a href="' + gmaps(p) + '" target="_blank" rel="noopener">Cómo llegar</a><button type="button" onclick="showOnMap(' + p.n + ')">Ver en el mapa</button></div></div>';
+    cards.appendChild(c);
   });
 
-  var sheet = document.getElementById("sheet");
-  document.getElementById("handle").addEventListener("click", function () { sheet.classList.toggle("collapsed"); });
+  // ----- Photos from Wikipedia (loaded at view time) -----
+  function loadPhoto(p) {
+    var i = 0;
+    function next() {
+      if (i >= p.wiki.length) return;
+      var ref = p.wiki[i++], lang = ref.slice(0, 2), title = ref.slice(3);
+      fetch("https://" + lang + ".wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title.replace(/ /g, "_")))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          var src = d && (d.originalimage || d.thumbnail);
+          if (!src) return next();
+          var url = src.source.replace(/\/\d+px-/, "/900px-");
+          if (!/\/thumb\//.test(url)) url = src.source;
+          var img = document.getElementById("img-" + p.n);
+          img.onerror = function () { img.hidden = true; img.src = src.source; img.onerror = null; img.hidden = false; };
+          img.src = url; img.hidden = false;
+          document.getElementById("credit-" + p.n).textContent = "Foto: Wikipedia";
+        })
+        .catch(next);
+    }
+    next();
+  }
+  places.forEach(loadPhoto);
 
-  var meMarker = null, watchId = null, status = document.getElementById("status"), btn = document.getElementById("locBtn");
+  // ----- Tabs -----
+  var mapView = document.getElementById("mapView"), placesView = document.getElementById("places");
+  var tabMap = document.getElementById("tabMap"), tabList = document.getElementById("tabList");
+  function show(which) {
+    var isMap = which === "map";
+    mapView.hidden = !isMap; placesView.hidden = isMap;
+    tabMap.setAttribute("aria-selected", isMap); tabList.setAttribute("aria-selected", !isMap);
+    if (isMap) setTimeout(function () { map.invalidateSize(); }, 50);
+  }
+  tabMap.addEventListener("click", function () { show("map"); });
+  tabList.addEventListener("click", function () { show("list"); });
+  window.showOnMap = function (n) {
+    show("map");
+    var p = places[n - 1];
+    setTimeout(function () { map.flyTo([p.lat, p.lng], 16); markers[n].openPopup(); }, 80);
+  };
+  window.showCard = function (n) {
+    show("list");
+    document.getElementById("card-" + n).scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
+  // ----- Location -----
+  var meMarker = null, status = document.getElementById("status"), btn = document.getElementById("locBtn");
   function km(a, b, c, d) {
     var R = 6371, dLat = (c - a) * Math.PI / 180, dLng = (d - b) * Math.PI / 180;
     var x = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a * Math.PI / 180) * Math.cos(c * Math.PI / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
     return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   }
-
   function onPos(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     if (!meMarker) {
-      meMarker = L.marker([lat, lng], { icon: L.divIcon({ className: "", html: '<div class="me"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), zIndexOffset: 1000 }).addTo(map).bindPopup("Estás aquí");
+      meMarker = L.marker([lat, lng], { icon: L.divIcon({ className: "", html: '<div class="me"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }), zIndexOffset: 1000 }).addTo(map).bindPopup("Estás aquí");
       map.setView([lat, lng], 15);
-    } else {
-      meMarker.setLatLng([lat, lng]);
-    }
-    status.textContent = "Ubicación activa (±" + Math.round(pos.coords.accuracy) + " m)";
-    btn.classList.remove("off");
-    btn.textContent = "Centrar en mí";
+    } else { meMarker.setLatLng([lat, lng]); }
+    status.textContent = "Tu ubicación está activa";
+    btn.classList.remove("off"); btn.textContent = "Centrar en mí";
     places.forEach(function (p) {
       var d = km(lat, lng, p.lat, p.lng);
-      document.getElementById("dist-" + p.n).textContent = d < 1 ? Math.round(d * 1000) + " m" : d.toFixed(1) + " km";
+      document.getElementById("dist-" + p.n).textContent = "A " + (d < 1 ? Math.round(d * 1000) + " metros" : d.toFixed(1) + " km") + " de donde estás";
     });
   }
-
   function onErr(err) {
-    var msg = err.code === 1 ? "Permiso de ubicación denegado. Actívalo en los ajustes del navegador." : "No se pudo obtener la ubicación.";
-    status.textContent = msg;
-    btn.classList.add("off");
-    btn.textContent = "Mi ubicación";
+    status.textContent = err.code === 1 ? "No diste permiso de ubicación. Actívalo en los ajustes del navegador." : "No se pudo obtener la ubicación.";
+    btn.classList.add("off"); btn.textContent = "Mi ubicación";
   }
-
   btn.addEventListener("click", function () {
-    if (!navigator.geolocation) { status.textContent = "Este navegador no tiene geolocalización."; return; }
+    if (!navigator.geolocation) { status.textContent = "Este navegador no tiene ubicación."; return; }
     if (meMarker) { map.flyTo(meMarker.getLatLng(), 16); return; }
     status.textContent = "Buscando tu ubicación...";
-    watchId = navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+    navigator.geolocation.watchPosition(onPos, onErr, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
   });
 </script>
 </body>
